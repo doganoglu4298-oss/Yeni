@@ -20,6 +20,12 @@ BINANCE_API_KEY = os.getenv("BINANCE_API_KEY", "")
 BINANCE_API_SECRET = os.getenv("BINANCE_API_SECRET", "")
 
 # ==========================================================
+# BINANCE SETTINGS
+# ==========================================================
+
+BINANCE_BASE_URL = "https://fapi.binance.com"
+
+# ==========================================================
 # TELEGRAM
 # ==========================================================
 
