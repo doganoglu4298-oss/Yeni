@@ -24,6 +24,7 @@ BINANCE_API_SECRET = os.getenv("BINANCE_API_SECRET", "")
 # ==========================================================
 
 BINANCE_BASE_URL = "https://fapi.binance.com"
+REQUEST_TIMEOUT = 10
 
 # ==========================================================
 # TELEGRAM
@@ -41,8 +42,6 @@ PAPER_TRADING = True
 TIMEFRAME = "15m"
 
 SCAN_INTERVAL = 60
-
-REQUEST_TIMEOUT = 10
 
 CANDLE_LIMIT = 100
 
