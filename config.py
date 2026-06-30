@@ -13,6 +13,7 @@ BINANCE_API_KEY = os.getenv("BINANCE_API_KEY", "")
 BINANCE_API_SECRET = os.getenv("BINANCE_API_SECRET", "")
 BINANCE_BASE_URL = "https://fapi.binance.com"
 REQUEST_TIMEOUT = 10
+RETRY_COUNT = 3  # <-- data.py'nin beklediği eksik değişken
 
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
