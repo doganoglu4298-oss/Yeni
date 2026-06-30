@@ -136,6 +136,12 @@ MAX_MARKET_SCORE = (
 )
 
 # ==========================================================
+# CONFIDENCE FILTER
+# ==========================================================
+
+MIN_CONFIDENCE = 70
+
+# ==========================================================
 # SIGNAL FILTERS
 # ==========================================================
 
@@ -178,7 +184,6 @@ COOLDOWN_MINUTES = 30
 # PAPER TRADING
 # ==========================================================
 
-# PAPER_TRADING is already defined above, keeping this part for settings
 INITIAL_BALANCE = 1000.0
 
 LEVERAGE = 10
