@@ -176,6 +176,7 @@ RISK_REWARD_RATIO = 2.5
 # ==========================================================
 
 MAX_OPEN_POSITIONS = 3
+MAX_POSITIONS = 3
 
 ALLOW_MULTIPLE_SAME_SYMBOL = False
 
