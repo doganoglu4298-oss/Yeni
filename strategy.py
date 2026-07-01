@@ -739,18 +739,18 @@ class Strategy:
         return position
 
     def manage_positions(
-        self,
-        symbols: list[str],
-    ) -> None:
+    self,
+    symbols: list[str],
+) -> None:
 
-        for position in self.open_positions():
+    for position in self.open_positions():
+
+        try:
 
             if position.symbol not in symbols:
                 continue
 
-            current = self.latest(
-                position.symbol
-            )
+            current = self.latest(position.symbol)
 
             close, reason = self.should_close_position(
                 position,
@@ -764,8 +764,12 @@ class Strategy:
                     current,
                     reason,
                 )
-                
+
                 self.finalize_position(position)
+
+        except Exception as error:
+
+            print(f"[POSITION] {position.symbol}: {error}")
 
     # ---------------------------------------------------------
     # Trade Execution
