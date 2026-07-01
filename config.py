@@ -96,8 +96,12 @@ RR = 2.5
 # TELEGRAM
 # ==========================================================
 
-BOT_TOKEN = os.getenv("BOT_TOKEN", "")
-CHAT_ID = os.getenv("CHAT_ID", "")
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
+
+# Geriye dönük uyumluluk
+BOT_TOKEN = TELEGRAM_BOT_TOKEN
+CHAT_ID = TELEGRAM_CHAT_ID
 
 # ==========================================================
 # JOURNAL
@@ -185,11 +189,3 @@ ATR_SL_MULTIPLIER = SL_ATR
 ATR_TP_MULTIPLIER = RR
 
 COOLDOWN_MINUTES = COOLDOWN_CANDLES * 15
-
-# ==========================================================
-# TELEGRAM COMPATIBILITY
-# ==========================================================
-
-TELEGRAM_BOT_TOKEN = BOT_TOKEN
-
-TELEGRAM_CHAT_ID = CHAT_ID
