@@ -171,3 +171,17 @@ LOG_FORMAT = "%(asctime)s | %(levelname)s | %(message)s"
 USE_TRAILING_STOP = False
 USE_BREAK_EVEN = False
 USE_PARTIAL_TP = False
+
+# ==========================================================
+# STRATEGY COMPATIBILITY
+# ==========================================================
+
+MIN_MARKET_SCORE = MARKET_SCORE_THRESHOLD
+
+MIN_CONFIDENCE = CONFIDENCE_THRESHOLD
+
+ATR_SL_MULTIPLIER = SL_ATR
+
+ATR_TP_MULTIPLIER = RR
+
+COOLDOWN_MINUTES = COOLDOWN_CANDLES * 15
