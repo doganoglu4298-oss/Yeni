@@ -185,3 +185,11 @@ ATR_SL_MULTIPLIER = SL_ATR
 ATR_TP_MULTIPLIER = RR
 
 COOLDOWN_MINUTES = COOLDOWN_CANDLES * 15
+
+# ==========================================================
+# TELEGRAM COMPATIBILITY
+# ==========================================================
+
+TELEGRAM_BOT_TOKEN = BOT_TOKEN
+
+TELEGRAM_CHAT_ID = CHAT_ID
