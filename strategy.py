@@ -226,10 +226,10 @@ class Strategy:
         return 30 <= row["rsi"] <= 60
 
     def enough_volume(self, row: pd.Series) -> bool:
-        return row.get("volume_ratio", 1.0) >= 1.0
+        return row.get("volume_ratio", 1.0) >= 0.8
 
     def enough_trend_strength(self, row: pd.Series) -> bool:
-        return row["trend_strength"] >= 20
+        return row["trend_strength"] >= 12
 
     def strong_candle(self, row: pd.Series) -> bool:
         body = abs(row["close"] - row["open"])
