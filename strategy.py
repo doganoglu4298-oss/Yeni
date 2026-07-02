@@ -617,7 +617,7 @@ class Strategy:
             return False
 
         # Trend gücü çok zayıfsa işlem açma
-        if current["trend_strength"] < 20:
+        if current["trend_strength"] < 12:
             return False
 
         return True
