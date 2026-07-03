@@ -265,52 +265,59 @@ class Strategy:
     def long_signal(
         self,
         symbol: str,
+        previous: pd.Series,
+        current: pd.Series,
     ) -> bool:
-
-        previous = self.previous(symbol)
-        current = self.latest(symbol)
 
         # Cooldown
         if self.in_cooldown(symbol):
+            print(f"{symbol} ⏳ Cooldown")
             return False
 
         # Aynı coinde açık işlem
         if self.has_open_position(symbol):
+            print(f"{symbol} 📌 Position already open")
             return False
 
         # Maksimum pozisyon
         if self.max_position_reached():
+            print("📌 Max open positions reached")
             return False
 
         # Market Score
         if not self.market_quality_ok(current):
+            print(f"{symbol} ❌ LONG : Market Score ({current['market_score']})")
             return False
 
         # Trend
         if not self.bullish_trend(current):
+            print(f"{symbol} ❌ LONG : EMA Trend")
             return False
 
         # Supertrend
         if not self.supertrend_bullish(current):
+            print(f"{symbol} ❌ LONG : Supertrend")
             return False
 
         # VWAP
         if not self.above_vwap(current):
+            print(f"{symbol} ❌ LONG : VWAP")
             return False
 
         # RSI
         if not self.rsi_long_ok(current):
+            print(f"{symbol} ❌ LONG : RSI ({current['rsi']:.1f})")
             return False
 
         # Volume
         if not self.enough_volume(current):
+            print(f"{symbol} ❌ LONG : Volume ({current['volume_ratio']:.2f})")
             return False
 
         # Trend Strength
         if not self.enough_trend_strength(current):
+            print(f"{symbol} ❌ LONG : Trend ({current['trend_strength']:.2f})")
             return False
-
-
 
         # Mum EMA7 altında kapandıysa
         if current["close"] < current["ema_7"]:
@@ -319,6 +326,7 @@ class Strategy:
         confidence = self.confidence(current)
 
         if confidence < MIN_CONFIDENCE:
+            print(f"{symbol} ❌ LONG : Confidence ({confidence})")
             return False
 
         return True
@@ -368,54 +376,63 @@ class Strategy:
     def short_signal(
         self,
         symbol: str,
+        previous: pd.Series,
+        current: pd.Series,
     ) -> bool:
-
-        previous = self.previous(symbol)
-        current = self.latest(symbol)
 
         # Cooldown
         if self.in_cooldown(symbol):
+            print(f"{symbol} ⏳ Cooldown")
             return False
 
         # Aynı coinde açık işlem
         if self.has_open_position(symbol):
+            print(f"{symbol} 📌 Position already open")
             return False
 
         # Maksimum pozisyon
         if self.max_position_reached():
+            print("📌 Max open positions reached")
             return False
 
         # Market Score
         if not self.market_quality_ok(current):
+            print(f"{symbol} ❌ SHORT : Market Score ({current['market_score']})")
             return False
 
         # EMA Trend
         if not self.bearish_trend(current):
+            print(f"{symbol} ❌ SHORT : EMA Trend")
             return False
 
         # Supertrend
         if not self.supertrend_bearish(current):
+            print(f"{symbol} ❌ SHORT : Supertrend")
             return False
 
         # VWAP
         if not self.below_vwap(current):
+            print(f"{symbol} ❌ SHORT : VWAP")
             return False
 
         # RSI
         if not self.rsi_short_ok(current):
+            print(f"{symbol} ❌ SHORT : RSI ({current['rsi']:.1f})")
             return False
 
         # Volume
         if not self.enough_volume(current):
+            print(f"{symbol} ❌ SHORT : Volume ({current['volume_ratio']:.2f})")
             return False
 
         # Trend Strength
         if not self.enough_trend_strength(current):
+            print(f"{symbol} ❌ SHORT : Trend ({current['trend_strength']:.2f})")
             return False
-
 
         # Kırmızı mum
         if not self.bearish_close(current):
+            print(f"{symbol} ❌ SHORT : Bearish Candle")
             return False
 
         # EMA7 artık direnç mi?
@@ -423,17 +440,20 @@ class Strategy:
             previous,
             current,
         ):
+            print(f"{symbol} ❌ SHORT : EMA7 Resistance")
             return False
 
         # EMA25 altında kapanış
         if not self.ema25_break_confirmed(
             current,
         ):
+            print(f"{symbol} ❌ SHORT : EMA25 Break")
             return False
 
         confidence = self.confidence(current)
 
         if confidence < MIN_CONFIDENCE:
+            print(f"{symbol} ❌ SHORT : Confidence ({confidence})")
             return False
 
         return True
@@ -578,6 +598,7 @@ class Strategy:
 
     def trade_allowed(
         self,
+        symbol: str,
         side: PositionSide,
         current: pd.Series,
     ) -> bool:
@@ -598,14 +619,20 @@ class Strategy:
 
         # Minimum 1.5 Risk/Reward
         if rr < 1.5:
+            print(f"❌ RR FAIL : {rr:.2f}")
             return False
 
         # ATR çok düşükse piyasa sıkışık olabilir
         if current["atr"] <= 0:
+            print("❌ ATR FAIL")
             return False
 
         # Trend gücü çok zayıfsa işlem açma
-        if current["trend_strength"] < 12:
+        if not self.enough_trend_strength(current):
+            print(
+                f"❌ TRADE BLOCKED : "
+                f"Trend={current['trend_strength']:.2f}"
+            )
             return False
 
         return True
@@ -724,6 +751,14 @@ class Strategy:
 
         position.pnl = pnl
 
+        print(
+            f"🏁 CLOSED | "
+            f"{position.symbol} | "
+            f"{position.side.name} | "
+            f"PnL={pnl:.4f} | "
+            f"{reason}"
+        )
+
         return position
 
     def manage_positions(
@@ -775,17 +810,51 @@ class Strategy:
         symbol = symbol.upper()
 
         previous = self.previous(symbol)
-        current = self.latest(symbol)
+        current = self.latest(symbol).copy()
 
         score, reasons = self.calculate_market_score(
             previous,
             current,
         )
+        current["market_score"] = score
+
+        print(
+            f"{symbol} | "
+            f"Score={score} | "
+            f"Reasons={', '.join(reasons)}"
+        )
+
+        # Görsel Loglama (Aynı veriyi scan_market içinde tekrar çekmemek için buraya taşıdık)
+        trend = "🟢" if self.bullish_trend(current) else (
+            "🔴" if self.bearish_trend(current) else "⚪"
+        )
+        supertrend = (
+            "🟢"
+            if current["supertrend_direction"] == 1
+            else "🔴"
+        )
+        vwap = (
+            "🟢"
+            if current["close"] > current["vwap"]
+            else "🔴"
+        )
+
+        print(
+            f"\n{symbol}"
+            f"\n Score : {current['market_score']}"
+            f"\n RSI   : {current['rsi']:.1f}"
+            f"\n Trend : {current['trend_strength']:.2f}"
+            f"\n Vol   : {current['volume_ratio']:.2f}"
+            f"\n EMA   : {trend}"
+            f"\n ST    : {supertrend}"
+            f"\n VWAP  : {vwap}"
+        )
 
         # LONG
-        if self.long_signal(symbol):
+        if self.long_signal(symbol, previous, current):
 
             if self.trade_allowed(
+                symbol,
                 PositionSide.LONG,
                 current,
             ):
@@ -796,18 +865,25 @@ class Strategy:
                     current,
                 )
 
-                position.market_score = score
                 position.signal_quality = self.signal_quality(
                     previous,
                     current,
                 )
 
+                print(
+                    f"✅ OPENED | {symbol} | "
+                    f"{position.side.name} | "
+                    f"Score={position.market_score} | "
+                    f"Conf={position.confidence}"
+                )
+
                 return position
 
         # SHORT
-        if self.short_signal(symbol):
+        if self.short_signal(symbol, previous, current):
 
             if self.trade_allowed(
+                symbol,
                 PositionSide.SHORT,
                 current,
             ):
@@ -818,10 +894,16 @@ class Strategy:
                     current,
                 )
 
-                position.market_score = score
                 position.signal_quality = self.signal_quality(
                     previous,
                     current,
+                )
+
+                print(
+                    f"✅ OPENED | {symbol} | "
+                    f"{position.side.name} | "
+                    f"Score={position.market_score} | "
+                    f"Conf={position.confidence}"
                 )
 
                 return position
@@ -839,22 +921,38 @@ class Strategy:
 
         opened_positions = []
 
+        print(
+            "\n"
+            "===================================="
+        )
+        print(
+            f"🔍 NEW SCAN : {datetime.utcnow()}"
+        )
+        print(
+            "===================================="
+        )
+
         for symbol in symbols:
 
             try:
 
                 position = self.evaluate_symbol(symbol)
-                current = self.latest(symbol)
-                print(
-                    f"{symbol} | "
-                    f"Score={current['market_score']} | "
-                    f"RSI={current['rsi']:.1f} | "
-                    f"Trend={current['trend_strength']} | "
-                    f"Vol={current['volume_ratio']:.2f}"
-                )
+                
+                # evaluate_symbol zaten 'current' çektiği için buradan sildik (Çift API çağrısını önlemek için)
 
                 if position is not None:
-                    print(f"✅ SIGNAL: {symbol} {position.side.name}")
+                    
+                    print(
+                        "\n"
+                        "=============================\n"
+                        f"🚀 {position.side.name} SIGNAL\n"
+                        f"Coin : {symbol}\n"
+                        f"Entry: {position.entry_price}\n"
+                        f"Score: {position.market_score}\n"
+                        f"Conf : {position.confidence}\n"
+                        "============================="
+                    )
+                    
                     opened_positions.append(position)
 
             except Exception as error:
@@ -862,6 +960,19 @@ class Strategy:
                 print(
                     f"[STRATEGY] {symbol}: {error}"
                 )
+
+        print(
+            "\n"
+            "===================================="
+        )
+
+        print(
+            f"✅ Scan Finished | Signals : {len(opened_positions)}"
+        )
+
+        print(
+            "====================================\n"
+        )
 
         return opened_positions
 
@@ -1012,6 +1123,10 @@ class Strategy:
         Main strategy execution.
         """
 
+        print(
+            "\n========== BOT LOOP =========="
+        )
+
         # Önce mevcut pozisyonları yönet
         self.manage_positions(symbols)
 
@@ -1022,6 +1137,10 @@ class Strategy:
         for position in new_positions:
 
             self.log_new_position(position)
+
+        print(
+            "========== LOOP END ==========\n"
+        )
 
         return new_positions
 
