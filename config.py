@@ -189,3 +189,66 @@ ATR_SL_MULTIPLIER = SL_ATR
 ATR_TP_MULTIPLIER = RR
 
 COOLDOWN_MINUTES = COOLDOWN_CANDLES * 15
+
+# ==========================================================
+# V7 SETTINGS
+# ==========================================================
+
+# -------------------------
+# BTC Trend Filter
+# -------------------------
+
+ENABLE_BTC_FILTER = True
+
+BTC_SYMBOL = "BTCUSDT"
+
+BTC_TIMEFRAME = "1h"
+
+BTC_FAST_EMA = 50
+BTC_SLOW_EMA = 200
+
+BTC_MIN_TREND_STRENGTH = 20
+
+# -------------------------
+# Multi Time Frame Filter
+# -------------------------
+
+ENABLE_MTF_FILTER = False
+
+HIGHER_TIMEFRAME = "1h"
+
+# -------------------------
+# Risk Controls
+# -------------------------
+
+MAX_DAILY_TRADES = 10
+
+MAX_DAILY_LOSS_PERCENT = 5.0
+
+MAX_CONSECUTIVE_LOSSES = 3
+
+# -------------------------
+# Smart Exit
+# -------------------------
+
+ENABLE_BREAK_EVEN = True
+
+BREAK_EVEN_ATR = 1.0
+
+ENABLE_TRAILING_STOP = False
+
+TRAILING_STOP_ATR = 1.5
+
+ENABLE_PARTIAL_TP = False
+
+PARTIAL_TP_PERCENT = 50
+
+# -------------------------
+# Learning
+# -------------------------
+
+SAVE_TRADE_STATISTICS = True
+
+SAVE_MARKET_SNAPSHOTS = True
+
+SAVE_FAILED_SIGNALS = True
