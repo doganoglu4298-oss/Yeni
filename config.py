@@ -72,15 +72,15 @@ VWAP_PERIOD = 20
 SUPERTREND_PERIOD = 10
 SUPERTREND_MULTIPLIER = 3.0
 
-MIN_VOLUME_RATIO = 1.2
-TREND_STRENGTH_THRESHOLD = 25
+MIN_VOLUME_RATIO = 0.50
+TREND_STRENGTH_THRESHOLD = 8
 
 # ==========================================================
 # SIGNAL FILTERS
 # ==========================================================
 
-MARKET_SCORE_THRESHOLD = 80
-CONFIDENCE_THRESHOLD = 80
+MARKET_SCORE_THRESHOLD = 70
+CONFIDENCE_THRESHOLD = 70
 
 # ==========================================================
 # RISK MANAGEMENT
