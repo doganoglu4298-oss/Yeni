@@ -20,6 +20,8 @@ from config import (
     ATR_TP_MULTIPLIER,
     MAX_OPEN_POSITIONS,
     COOLDOWN_MINUTES,
+    MIN_VOLUME_RATIO,
+    TREND_STRENGTH_THRESHOLD,
 )
 
 from models import (
@@ -226,10 +228,10 @@ class Strategy:
         return 30 <= row["rsi"] <= 60
 
     def enough_volume(self, row: pd.Series) -> bool:
-        return row.get("volume_ratio", 1.0) >= 0.5
+        return row.get("volume_ratio", 1.0) >= MIN_VOLUME_RATIO
 
     def enough_trend_strength(self, row: pd.Series) -> bool:
-        return row["trend_strength"] >= 8
+        return row["trend_strength"] >= TREND_STRENGTH_THRESHOLD
 
     def strong_candle(self, row: pd.Series) -> bool:
         body = abs(row["close"] - row["open"])
@@ -237,7 +239,7 @@ class Strategy:
         return body >= (high_low * 0.4) if high_low > 0 else False
 
     def signal_quality(self, previous: pd.Series, current: pd.Series) -> int:
-        quality = 50
+        quality = int(current["market_score"])
         if 50 <= current["rsi"] <= 65 or 35 <= current["rsi"] <= 50:
             quality += 25
         if current.get("volume_ratio", 1.0) > 1.5:
@@ -824,7 +826,7 @@ class Strategy:
             f"Reasons={', '.join(reasons)}"
         )
 
-        # Görsel Loglama (Aynı veriyi scan_market içinde tekrar çekmemek için buraya taşıdık)
+        # Görsel Loglama
         trend = "🟢" if self.bullish_trend(current) else (
             "🔴" if self.bearish_trend(current) else "⚪"
         )
@@ -937,8 +939,6 @@ class Strategy:
             try:
 
                 position = self.evaluate_symbol(symbol)
-                
-                # evaluate_symbol zaten 'current' çektiği için buradan sildik (Çift API çağrısını önlemek için)
 
                 if position is not None:
                     
