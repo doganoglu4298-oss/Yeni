@@ -86,7 +86,8 @@ CONFIDENCE_THRESHOLD = 70
 # RISK MANAGEMENT
 # ==========================================================
 
-MAX_CONSECUTIVE_LOSSES = 5
+MAX_DAILY_TRADES = 10
+MAX_CONSECUTIVE_LOSSES = 3  # V7 ayarlarındaki güncel değer (3) baz alındı
 MAX_DAILY_LOSS_PERCENT = 5.0
 
 SL_ATR = 1.5
@@ -188,7 +189,12 @@ ATR_SL_MULTIPLIER = SL_ATR
 
 ATR_TP_MULTIPLIER = RR
 
-COOLDOWN_MINUTES = COOLDOWN_CANDLES * 15
+# TIMEFRAME değerinden dakikayı otomatik hesaplama ('15m', '1h' vb. formatlar için)
+_tf_value = int(TIMEFRAME[:-1])
+_tf_unit = TIMEFRAME[-1].lower()
+_tf_in_minutes = _tf_value * 60 if _tf_unit == 'h' else _tf_value
+
+COOLDOWN_MINUTES = COOLDOWN_CANDLES * _tf_in_minutes
 
 # ==========================================================
 # V7 SETTINGS
@@ -216,16 +222,6 @@ BTC_MIN_TREND_STRENGTH = 20
 ENABLE_MTF_FILTER = False
 
 HIGHER_TIMEFRAME = "1h"
-
-# -------------------------
-# Risk Controls
-# -------------------------
-
-MAX_DAILY_TRADES = 10
-
-MAX_DAILY_LOSS_PERCENT = 5.0
-
-MAX_CONSECUTIVE_LOSSES = 3
 
 # -------------------------
 # Smart Exit
