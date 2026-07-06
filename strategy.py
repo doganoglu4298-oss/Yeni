@@ -1,13 +1,17 @@
 """
-Trading Bot V6 Professional
+Trading Bot V6 Professional -> V7 Enhanced
 strategy.py
 
-Main trading strategy.
+Main trading strategy with V7 enhancements:
+- BTC Macro Trend Filter
+- Break-Even & Trailing Stop (Smart Exits)
+- Optimized data fetching (last_two)
 """
 
 from __future__ import annotations
 
 import csv
+import os
 from datetime import datetime, timedelta
 from typing import Optional
 
@@ -28,6 +32,7 @@ from config import (
     USE_COMPOUND,
     MIN_NOTIONAL,
     MAX_POSITION_PERCENT,
+    # V7 Yeni İmportlar
     ENABLE_BTC_FILTER,
     ENABLE_BREAK_EVEN,
     BREAK_EVEN_ATR,
@@ -217,6 +222,35 @@ class Strategy:
         return MarketRegime.RANGE
 
     # ---------------------------------------------------------
+    # BTC Macro Trend Filter (V7)
+    # ---------------------------------------------------------
+
+    def _is_btc_trend_ok(self, side: PositionSide) -> bool:
+        """
+        BTC 1 saatlik trendi işlemin yönünü destekliyor mu?
+        """
+        if not ENABLE_BTC_FILTER:
+            return True
+
+        try:
+            btc_df = self.data.btc_market()
+            if btc_df is None or len(btc_df) < 2:
+                return True  # Veri yoksa engelleme (fail-open)
+                
+            latest_btc = btc_df.iloc[-1]
+            ema_fast = latest_btc.get('ema_50', 0)
+            ema_slow = latest_btc.get('ema_200', 0)
+            
+            if side == PositionSide.LONG:
+                return ema_fast > ema_slow  # BTC Boğa ise LONG'a izin ver
+            else:
+                return ema_fast < ema_slow  # BTC Ayı ise SHORT'a izin ver
+                
+        except Exception as e:
+            print(f"[BTC FILTER] Hata: {e}")
+            return True
+
+    # ---------------------------------------------------------
     # Confidence
     # ---------------------------------------------------------
 
@@ -361,6 +395,11 @@ class Strategy:
             print("📌 Max open positions reached")
             return False
 
+        # V7: BTC Makro Trend Kontrolü
+        if not self._is_btc_trend_ok(PositionSide.LONG):
+            print(f"{symbol} ❌ LONG : BTC Trend Filter (Bearish)")
+            return False
+
         # Market Score
         if not self.market_quality_ok(current):
             print(f"{symbol} ❌ LONG : Market Score ({current['market_score']})")
@@ -470,6 +509,11 @@ class Strategy:
         # Maksimum pozisyon
         if self.max_position_reached():
             print("📌 Max open positions reached")
+            return False
+
+        # V7: BTC Makro Trend Kontrolü
+        if not self._is_btc_trend_ok(PositionSide.SHORT):
+            print(f"{symbol} ❌ SHORT : BTC Trend Filter (Bullish)")
             return False
 
         # Market Score
@@ -746,6 +790,7 @@ class Strategy:
             confidence=self.confidence(current),
             market_score=int(current["market_score"]),
             regime=self.market_regime(current),
+            entry_atr=float(current["atr"]),  # V7: ATR'yi kaydet
         )
 
         self.positions.append(position)
@@ -753,6 +798,63 @@ class Strategy:
         self.start_cooldown(symbol)
 
         return position
+
+    # ---------------------------------------------------------
+    # Smart Exits: Break-Even & Trailing Stop (V7)
+    # ---------------------------------------------------------
+
+    def _update_smart_exits(self, position: Position, current: pd.Series) -> None:
+        """
+        Pozisyon kâra geçtiğinde Stop Loss'u günceller.
+        """
+        price = float(current["close"])
+        atr = position.entry_atr
+        
+        if atr <= 0:
+            return
+
+        if position.side == PositionSide.LONG:
+            # En yüksek fiyatı güncelle
+            if price > position.highest_price:
+                position.highest_price = price
+            
+            # Break-Even
+            if ENABLE_BREAK_EVEN:
+                be_trigger = position.entry_price + (atr * BREAK_EVEN_ATR)
+                # Fiyat tetikleyiciyi geçtiyse ve SL hala girişin altındaysa
+                if position.highest_price >= be_trigger and position.stop_loss < position.entry_price:
+                    position.stop_loss = position.entry_price
+                    print(f"🛡️ {position.symbol} | BREAK-EVEN | SL güncellendi: {position.stop_loss:.6f}")
+                    
+            # Trailing Stop
+            if ENABLE_TRAILING_STOP:
+                ts_trigger = position.entry_price + (atr * TRAILING_STOP_ATR)
+                if position.highest_price >= ts_trigger:
+                    new_sl = position.highest_price - (atr * TRAILING_STOP_ATR)
+                    if new_sl > position.stop_loss:
+                        position.stop_loss = new_sl
+                        print(f"📈 {position.symbol} | TRAILING STOP | SL güncellendi: {position.stop_loss:.6f}")
+
+        else:  # SHORT
+            # En düşük fiyatı güncelle
+            if price < position.lowest_price:
+                position.lowest_price = price
+                
+            # Break-Even
+            if ENABLE_BREAK_EVEN:
+                be_trigger = position.entry_price - (atr * BREAK_EVEN_ATR)
+                if position.lowest_price <= be_trigger and position.stop_loss > position.entry_price:
+                    position.stop_loss = position.entry_price
+                    print(f"🛡️ {position.symbol} | BREAK-EVEN | SL güncellendi: {position.stop_loss:.6f}")
+                    
+            # Trailing Stop
+            if ENABLE_TRAILING_STOP:
+                ts_trigger = position.entry_price - (atr * TRAILING_STOP_ATR)
+                if position.lowest_price <= ts_trigger:
+                    new_sl = position.lowest_price + (atr * TRAILING_STOP_ATR)
+                    if new_sl < position.stop_loss:
+                        position.stop_loss = new_sl
+                        print(f"📉 {position.symbol} | TRAILING STOP | SL güncellendi: {position.stop_loss:.6f}")
 
     # ---------------------------------------------------------
     # Position Management
@@ -842,6 +944,9 @@ class Strategy:
 
                 current = self.latest(position.symbol)
 
+                # V7: Kapanış kontrolü yapmadan önce SL/TP seviyelerini güncelle
+                self._update_smart_exits(position, current)
+
                 close, reason = self.should_close_position(
                     position,
                     current,
@@ -879,7 +984,7 @@ class Strategy:
 
         symbol = symbol.upper()
 
-                # Tek seferde hem önceki hem güncel mumu çek (Smart Cache sayesinde 1 API isteği)
+        # V7 Performans: Tek seferde hem önceki hem güncel mumu çek
         previous, current = self.data.last_two(symbol)
         current = current.copy()
 
@@ -1040,10 +1145,7 @@ class Strategy:
         )
 
         print(
-            "====================================\n"
-        )
-
-        return opened_positions
+                return opened_positions
 
     # ---------------------------------------------------------
     # Journal & Learning
@@ -1077,7 +1179,7 @@ class Strategy:
 
         file_exists = (
             os.path.exists(filename)
-            and os.path.getsize(filename) > 0
+            and os.getsize(filename) > 0
         )
 
         with open(
@@ -1171,10 +1273,8 @@ class Strategy:
         position: Position,
     ) -> None:
         """
-        Store finished trade for later analysis.
+        Save trade result for learning/analysis.
         """
-
-        result = position.result.value
 
         try:
 
@@ -1189,7 +1289,7 @@ class Strategy:
                     position.confidence,
                     position.pnl,
                     position.pnl_percent,
-                    result,
+                    position.result.value,
                     position.exit_reason,
                 ],
             )
@@ -1205,23 +1305,16 @@ class Strategy:
         position: Position,
     ) -> None:
         """
-        Save completed trade.
+        Update balance, log to journal and learning log.
+        Called exactly once when a position is closed.
         """
 
-        self.update_balance(
-            position
-        )
-
-        self.log_closed_position(
-            position
-        )
-
-        self.update_learning_log(
-            position
-        )
+        self.update_balance(position)
+        self.log_closed_position(position)
+        self.update_learning_log(position)
 
     # ---------------------------------------------------------
-    # Main Loop
+    # Main Loop & Summary
     # ---------------------------------------------------------
 
     def run(
@@ -1229,54 +1322,38 @@ class Strategy:
         symbols: list[str],
     ) -> list[Position]:
         """
-        Main strategy execution.
+        Main strategy loop.
+        1. Manage open positions (check SL/TP/Exits).
+        2. Scan market for new signals.
+        3. Log new positions.
         """
 
-        print(
-            "\n========== BOT LOOP =========="
-        )
-
-        # Önce mevcut pozisyonları yönet
         self.manage_positions(symbols)
-
-        # Yeni işlemleri tara
+        
         new_positions = self.scan_market(symbols)
-
-        # Açılan işlemleri kaydet
+        
         for position in new_positions:
-
             self.log_new_position(position)
-
-        print(
-            "========== LOOP END ==========\n"
-        )
-
+            
         return new_positions
 
     def summary(self) -> dict:
         """
-        Strategy summary.
+        Return a quick summary of the strategy state.
         """
 
-        open_positions = self.open_positions()
-
         return {
-
-            "open_positions": len(open_positions),
-
+            "open_positions": len(self.open_positions()),
             "cooldowns": len(self.cooldowns),
-
             "total_positions": len(self.positions),
-
         }
 
     def reset(self) -> None:
         """
-        Reset strategy state.
+        Clear all positions and cooldowns.
         """
 
         self.positions.clear()
-
         self.cooldowns.clear()
-
         self.last_signal.clear()
+                    
