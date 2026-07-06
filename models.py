@@ -55,6 +55,7 @@ class Position(BaseModel):
     confidence:int
     market_score:int
     regime:MarketRegime
+    entry_atr: float = 0.0
     opened_at:datetime=field(default_factory=datetime.utcnow)
     status:PositionStatus=PositionStatus.OPEN
     exit_price:Optional[float]=None
