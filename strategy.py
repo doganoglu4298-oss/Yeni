@@ -874,8 +874,9 @@ class Strategy:
 
         symbol = symbol.upper()
 
-        previous = self.previous(symbol)
-        current = self.latest(symbol).copy()
+                # Tek seferde hem önceki hem güncel mumu çek (Smart Cache sayesinde 1 API isteği)
+        previous, current = self.data.last_two(symbol)
+        current = current.copy()
 
         score, reasons = self.calculate_market_score(
             previous,
