@@ -28,6 +28,11 @@ from config import (
     USE_COMPOUND,
     MIN_NOTIONAL,
     MAX_POSITION_PERCENT,
+    ENABLE_BTC_FILTER,
+    ENABLE_BREAK_EVEN,
+    BREAK_EVEN_ATR,
+    ENABLE_TRAILING_STOP,
+    TRAILING_STOP_ATR,
 )
 
 from models import (
