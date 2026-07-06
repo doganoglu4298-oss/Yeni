@@ -3,6 +3,7 @@ Trading Bot V6 Professional
 data.py
 
 Handles Binance market data retrieval and preprocessing.
+Optimized with Smart Caching to prevent redundant API calls.
 """
 
 from __future__ import annotations
@@ -25,12 +26,30 @@ from config import (
 from indicators import IndicatorEngine
 
 
+# ---------------------------------------------------------
+# Timeframe Helper
+# ---------------------------------------------------------
+
+def _get_timeframe_seconds() -> int:
+    """
+    Convert config TIMEFRAME (e.g., '15m', '1h') to seconds.
+    Used for smart caching logic.
+    """
+    try:
+        val = int(TIMEFRAME[:-1])
+        unit = TIMEFRAME[-1].lower()
+        if unit == 'm': return val * 60
+        if unit == 'h': return val * 3600
+        if unit == 'd': return val * 86400
+    except Exception:
+        pass
+    return 900  # Default fallback: 15 minutes
+
+
 class BinanceDataClient:
     """
     Binance Public API client.
-
-    Uses only public market data.
-    No API Key required.
+    Uses only public market data. No API Key required.
     """
 
     def __init__(
@@ -59,23 +78,17 @@ class BinanceDataClient:
         last_error = None
 
         for attempt in range(self.retries):
-
             try:
-
                 response = requests.get(
                     url,
                     params=params,
                     timeout=self.timeout,
                 )
-
                 response.raise_for_status()
-
                 return response.json()
 
             except requests.RequestException as exc:
-
                 last_error = exc
-
                 time.sleep(1)
 
         raise ConnectionError(
@@ -88,20 +101,12 @@ class BinanceDataClient:
         interval: str = TIMEFRAME,
         limit: int = CANDLE_LIMIT,
     ) -> list:
-        """
-        Download raw candle data from Binance.
-        """
-
         params = {
             "symbol": symbol.upper(),
             "interval": interval,
             "limit": limit,
         }
-
-        return self._request(
-            self.klines_url,
-            params,
-        )
+        return self._request(self.klines_url, params)
 
     def get_dataframe(
         self,
@@ -109,10 +114,6 @@ class BinanceDataClient:
         interval: str = TIMEFRAME,
         limit: int = CANDLE_LIMIT,
     ) -> pd.DataFrame:
-        """
-        Download candles and convert them
-        into a clean DataFrame.
-        """
 
         candles = self.get_klines(
             symbol=symbol,
@@ -121,140 +122,57 @@ class BinanceDataClient:
         )
 
         columns = [
-            "open_time",
-            "open",
-            "high",
-            "low",
-            "close",
-            "volume",
-            "close_time",
-            "quote_asset_volume",
-            "number_of_trades",
-            "taker_buy_base",
-            "taker_buy_quote",
-            "ignore",
+            "open_time", "open", "high", "low", "close", "volume",
+            "close_time", "quote_asset_volume", "number_of_trades",
+            "taker_buy_base", "taker_buy_quote", "ignore",
         ]
 
-        df = pd.DataFrame(
-            candles,
-            columns=columns,
-        )
+        df = pd.DataFrame(candles, columns=columns)
 
         numeric_columns = [
-            "open",
-            "high",
-            "low",
-            "close",
-            "volume",
-            "quote_asset_volume",
-            "taker_buy_base",
-            "taker_buy_quote",
+            "open", "high", "low", "close", "volume",
+            "quote_asset_volume", "taker_buy_base", "taker_buy_quote",
         ]
 
         for column in numeric_columns:
-            df[column] = pd.to_numeric(
-                df[column],
-                errors="coerce",
-            )
+            df[column] = pd.to_numeric(df[column], errors="coerce")
 
-        df["open_time"] = pd.to_datetime(
-            df["open_time"],
-            unit="ms",
-        )
+        df["open_time"] = pd.to_datetime(df["open_time"], unit="ms")
+        df["close_time"] = pd.to_datetime(df["close_time"], unit="ms")
 
-        df["close_time"] = pd.to_datetime(
-            df["close_time"],
-            unit="ms",
-        )
-
-        df.sort_values(
-            "open_time",
-            inplace=True,
-        )
-
-        df.reset_index(
-            drop=True,
-            inplace=True,
-        )
+        df.sort_values("open_time", inplace=True)
+        df.reset_index(drop=True, inplace=True)
 
         return df
 
-    def validate_dataframe(
-        self,
-        df: pd.DataFrame,
-    ) -> None:
-        """
-        Validate OHLCV dataframe before
-        indicator calculations.
-        """
-
-        required_columns = [
-            "open",
-            "high",
-            "low",
-            "close",
-            "volume",
-        ]
-
+    def validate_dataframe(self, df: pd.DataFrame) -> None:
+        required_columns = ["open", "high", "low", "close", "volume"]
         for column in required_columns:
-
             if column not in df.columns:
-                raise ValueError(
-                    f"Missing column: {column}"
-                )
+                raise ValueError(f"Missing column: {column}")
 
         if len(df) < 250:
-            raise ValueError(
-                "Not enough candles."
-            )
+            raise ValueError("Not enough candles.")
 
-    def clean_dataframe(
-        self,
-        df: pd.DataFrame,
-    ) -> pd.DataFrame:
-        """
-        Remove invalid rows and
-        prepare dataframe.
-        """
-
+    def clean_dataframe(self, df: pd.DataFrame) -> pd.DataFrame:
         df = df.copy()
 
-        numeric_columns = [
-            "open",
-            "high",
-            "low",
-            "close",
-            "volume",
-        ]
-
+        numeric_columns = ["open", "high", "low", "close", "volume"]
         for column in numeric_columns:
-
-            df[column] = pd.to_numeric(
-                df[column],
-                errors="coerce",
-            )
+            df[column] = pd.to_numeric(df[column], errors="coerce")
 
         df.dropna(inplace=True)
 
         df = df[
-            (df["volume"] > 0)
-            &
-            (df["high"] >= df["low"])
-            &
-            (df["high"] >= df["close"])
-            &
-            (df["high"] >= df["open"])
-            &
-            (df["low"] <= df["close"])
-            &
+            (df["volume"] > 0) &
+            (df["high"] >= df["low"]) &
+            (df["high"] >= df["close"]) &
+            (df["high"] >= df["open"]) &
+            (df["low"] <= df["close"]) &
             (df["low"] <= df["open"])
         ]
 
-        df.reset_index(
-            drop=True,
-            inplace=True,
-        )
-
+        df.reset_index(drop=True, inplace=True)
         self.validate_dataframe(df)
 
         return df
@@ -265,16 +183,7 @@ class BinanceDataClient:
         interval: str = TIMEFRAME,
         limit: int = CANDLE_LIMIT,
     ) -> pd.DataFrame:
-        """
-        Download + clean market data.
-        """
-
-        df = self.get_dataframe(
-            symbol=symbol,
-            interval=interval,
-            limit=limit,
-        )
-
+        df = self.get_dataframe(symbol=symbol, interval=interval, limit=limit)
         return self.clean_dataframe(df)
 
     def get_market_data(
@@ -283,318 +192,108 @@ class BinanceDataClient:
         interval: str = TIMEFRAME,
         limit: int = CANDLE_LIMIT,
     ) -> pd.DataFrame:
-        """
-        Download, clean and calculate
-        all technical indicators.
-        """
-
-        df = self.get_clean_dataframe(
-            symbol=symbol,
-            interval=interval,
-            limit=limit,
-        )
-
+        df = self.get_clean_dataframe(symbol=symbol, interval=interval, limit=limit)
         df = self.indicators.calculate(df)
-
         return df
 
-    def get_latest_candle(
-        self,
-        symbol: str,
-        interval: str = TIMEFRAME,
-    ) -> pd.Series:
-        """
-        Return latest candle with
-        all indicators calculated.
-        """
-
-        df = self.get_market_data(
-            symbol=symbol,
-            interval=interval,
-            limit=CANDLE_LIMIT,
-        )
-
-        return df.iloc[-1]
-
-    def get_previous_candle(
-        self,
-        symbol: str,
-        interval: str = TIMEFRAME,
-    ) -> pd.Series:
-        """
-        Return previous candle.
-        """
-
-        df = self.get_market_data(
-            symbol=symbol,
-            interval=interval,
-            limit=CANDLE_LIMIT,
-        )
-
-        return df.iloc[-2]
-
-    def get_last_two_candles(
-        self,
-        symbol: str,
-        interval: str = TIMEFRAME,
-    ) -> tuple[pd.Series, pd.Series]:
-        """
-        Return previous and latest candle.
-        """
-
-        df = self.get_market_data(
-            symbol=symbol,
-            interval=interval,
-            limit=CANDLE_LIMIT,
-        )
-
-        return (
-            df.iloc[-2],
-            df.iloc[-1],
-        )
-
-    def has_enough_data(
-        self,
-        symbol: str,
-        interval: str = TIMEFRAME,
-    ) -> bool:
-        """
-        Check if enough candles exist.
-        """
-
-        try:
-
-            df = self.get_dataframe(
-                symbol=symbol,
-                interval=interval,
-                limit=CANDLE_LIMIT,
-            )
-
-            return len(df) >= 250
-
-        except Exception:
-            return False
-
-    def normalize_symbol(
-        self,
-        symbol: str,
-    ) -> str:
-        """
-        Normalize trading symbol.
-        """
-
+    def normalize_symbol(self, symbol: str) -> str:
         symbol = symbol.upper().strip()
-
         if not symbol.endswith("USDT"):
             symbol += "USDT"
-
         return symbol
 
-    def get_market_dataframe(
-        self,
-        symbol: str,
-    ) -> pd.DataFrame:
-        """
-        Shortcut for strategy.py
-        """
-
+    def get_market_dataframe(self, symbol: str) -> pd.DataFrame:
         symbol = self.normalize_symbol(symbol)
-
-        return self.get_market_data(
-            symbol=symbol,
-            interval=TIMEFRAME,
-            limit=CANDLE_LIMIT,
-        )
-
-    def get_multiple_markets(
-        self,
-        symbols: list[str],
-    ) -> dict[str, pd.DataFrame]:
-        """
-        Download multiple markets.
-        """
-
-        markets = {}
-
-        for symbol in symbols:
-
-            try:
-
-                symbol = self.normalize_symbol(symbol)
-
-                markets[symbol] = (
-                    self.get_market_dataframe(symbol)
-                )
-
-            except Exception as error:
-
-                print(
-                    f"[DATA] {symbol}: {error}"
-                )
-
-        return markets
-
-    def latest_price(
-        self,
-        symbol: str,
-    ) -> float:
-        """
-        Return latest close price.
-        """
-
-        df = self.get_market_dataframe(symbol)
-
-        return float(df.iloc[-1]["close"])
-
-    def latest_volume(
-        self,
-        symbol: str,
-    ) -> float:
-        """
-        Return latest volume.
-        """
-
-        df = self.get_market_dataframe(symbol)
-
-        return float(df.iloc[-1]["volume"])
-
-    def market_snapshot(
-        self,
-        symbol: str,
-    ) -> dict:
-        """
-        Returns latest indicator snapshot.
-        """
-
-        row = self.get_latest_candle(symbol)
-
-        return {
-
-            "symbol": symbol,
-
-            "price": float(row["close"]),
-
-            "ema7": float(row["ema_7"]),
-            "ema25": float(row["ema_25"]),
-            "ema50": float(row["ema_50"]),
-            "ema200": float(row["ema_200"]),
-
-            "rsi": float(row["rsi"]),
-
-            "atr": float(row["atr"]),
-
-            "vwap": float(row["vwap"]),
-
-            "volume_ratio": float(
-                row["volume_ratio"]
-            ),
-
-            "trend_strength": float(
-                row["trend_strength"]
-            ),
-
-            "market_score": int(
-                row["market_score"]
-            ),
-
-            "supertrend": int(
-                row["supertrend_direction"]
-            ),
-        }
+        return self.get_market_data(symbol=symbol, interval=TIMEFRAME, limit=CANDLE_LIMIT)
 
 
 class DataManager:
     """
-    Simple cache layer for market data.
-    Reduces unnecessary API requests.
+    Smart cache layer for market data.
+    Prevents redundant API calls and heavy indicator recalculations
+    within the same candle timeframe.
     """
 
     def __init__(self):
         self.client = BinanceDataClient()
-        self.cache: dict[str, pd.DataFrame] = {}
-        self.btc_cache = None
-        self.btc_cache_time = None
-
-    def refresh(
-        self,
-        symbol: str,
-    ) -> pd.DataFrame:
-
-        symbol = self.client.normalize_symbol(symbol)
-
-        df = self.client.get_market_dataframe(symbol)
-
-        self.cache[symbol] = df
-
-        return df
+        
+        # Cache structure: { symbol: (fetch_timestamp, dataframe) }
+        self.cache: dict[str, tuple[float, pd.DataFrame]] = {}
+        
+        # BTC specific cache (1 min TTL)
+        self.btc_cache: Optional[pd.DataFrame] = None
+        self.btc_cache_time: Optional[float] = None
+        
+        # Timeframe in seconds for smart caching
+        self._tf_seconds = _get_timeframe_seconds()
 
     def get(
         self,
         symbol: str,
         refresh: bool = False,
     ) -> pd.DataFrame:
-
+        """
+        Get market data. Uses cache if data is fresh (within current candle).
+        """
         symbol = self.client.normalize_symbol(symbol)
+        current_time = time.time()
 
-        if (
-            refresh
-            or symbol not in self.cache
-        ):
+        # Check if we have valid cached data
+        if not refresh and symbol in self.cache:
+            fetch_time, df = self.cache[symbol]
+            
+            # If fetched less than timeframe seconds ago, use cache
+            if (current_time - fetch_time) < self._tf_seconds:
+                return df
 
-            return self.refresh(symbol)
+        # Fetch new data and update cache
+        df = self.client.get_market_dataframe(symbol)
+        self.cache[symbol] = (current_time, df)
+        
+        return df
 
-        return self.cache[symbol]
+    def refresh(self, symbol: str) -> pd.DataFrame:
+        """Force refresh data from API."""
+        symbol = self.client.normalize_symbol(symbol)
+        df = self.client.get_market_dataframe(symbol)
+        self.cache[symbol] = (time.time(), df)
+        return df
 
-    def latest(
-        self,
-        symbol: str,
-    ) -> pd.Series:
+    def latest(self, symbol: str) -> pd.Series:
+        return self.get(symbol).iloc[-1]
 
-        return self.get(symbol, refresh=True).iloc[-1]
+    def previous(self, symbol: str) -> pd.Series:
+        return self.get(symbol).iloc[-2]
 
-    def previous(
-        self,
-        symbol: str,
-    ) -> pd.Series:
+    def last_two(self, symbol: str) -> tuple[pd.Series, pd.Series]:
+        """
+        Optimized method to get both previous and latest candles 
+        in a single API call / cache hit.
+        """
+        df = self.get(symbol)
+        return df.iloc[-2], df.iloc[-1]
 
-        return self.get(symbol, refresh=True).iloc[-2]
-
-
-    def last_two(
-        self,
-        symbol: str,
-    ) -> tuple[pd.Series, pd.Series]:
-
-        df = self.get(symbol, refresh=True)
-
-        return (
-            df.iloc[-2],
-            df.iloc[-1],
-        )
-
-    def btc_market(
-        self,
-        refresh: bool = False,
-    ) -> pd.DataFrame:
+    def btc_market(self, refresh: bool = False) -> pd.DataFrame:
         from datetime import datetime, timedelta
 
+        current_time = time.time()
+        
+        # Refresh BTC cache if it's older than 60 seconds
         if (
-            self.btc_cache is None
-            or refresh
-            or self.btc_cache_time is None
-            or datetime.utcnow() - self.btc_cache_time > timedelta(minutes=1)
+            self.btc_cache is None 
+            or refresh 
+            or self.btc_cache_time is None 
+            or (current_time - self.btc_cache_time) > 60
         ):
             self.btc_cache = self.client.get_market_dataframe("BTCUSDT")
-            self.btc_cache_time = datetime.utcnow()
+            self.btc_cache_time = current_time
 
         return self.btc_cache
 
     def clear(self) -> None:
-        """
-        Clear cached data.
-        """
-
         self.cache.clear()
+        self.btc_cache = None
+        self.btc_cache_time = None
 
 
 __all__ = [
