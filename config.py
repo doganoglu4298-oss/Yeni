@@ -135,10 +135,10 @@ class TelegramConfig:
     bot_token: str = os.getenv("TELEGRAM_BOT_TOKEN", "YOUR_TELEGRAM_BOT_TOKEN")
     chat_id: str = os.getenv("TELEGRAM_CHAT_ID", "YOUR_CHAT_ID")
     
-    notify_on_grid_fill: bool = True
-    notify_on_bot_stop_loss: bool = True
-    notify_daily_summary: bool = True
-    notify_regime_change: bool = True
+    notify_on_grid_fill: bool = False      # Minimal kurulum
+    notify_on_bot_stop_loss: bool = True   # Risk koruması için açık
+    notify_daily_summary: bool = False     # Minimal kurulum
+    notify_regime_change: bool = True      # Rejim değişimini bilmek önemli
 
 
 @dataclass
