@@ -1,0 +1,12 @@
+# Vadeli Grid Trading Bot - Requirements
+# Railway deployment için gerekli kütüphaneler
+
+ccxt>=4.0.0
+pandas>=2.0.0
+numpy>=1.24.0
+requests>=2.28.0
+
+# Opsiyonel (ileride kullanılabilir)
+# python-telegram-bot>=20.0
+# ta>=0.11.0          # Daha gelişmiş indikatörler için
+# python-dotenv>=1.0.0
