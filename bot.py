@@ -67,6 +67,7 @@ class RegimeBasedBot:
             self.grid_strategy.calculate_grid_levels(current_price)
 
         # === Açık Emir Kontrolü ===
+        open_orders = []
         try:
             open_orders = self.data.exchange.fetch_open_orders(self.config.symbol.symbol)
             open_order_count = len(open_orders)
@@ -136,17 +137,6 @@ class RegimeBasedBot:
     def run(self):
         self.running = True
         logger.info("Regime Based Bot başlatıldı...")
-
-        # Telegram başlangıç mesajı (test için)
-        if self.telegram and self.config.telegram.enabled:
-            try:
-                self.telegram.send_message(
-                    "✅ <b>Bot Başlatıldı</b>\n"
-                    f"Symbol: <b>{self.config.symbol.symbol}</b>\n"
-                    f"Mode: {'Paper (Dry Run)' if self.config.dry_run else 'Live'}"
-                )
-            except Exception as e:
-                logger.error(f"Telegram başlangıç mesajı gönderilemedi: {e}")
 
         try:
             while self.running:
