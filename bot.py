@@ -41,6 +41,7 @@ class RegimeBasedBot:
         self.grid_strategy = GridStrategy(config)
         self.risk = RiskManager(config)
         self.running = False
+        self.passive_grid_counter = 0
 
         # Telegram entegrasyonu
         try:
@@ -89,6 +90,15 @@ class RegimeBasedBot:
 
         if self.config.dry_run:
             logger.info(f"[DRY RUN] {len(filtered_orders)} grid emri üretildi (Açık emir: {open_order_count}/{max_orders})")
+
+            # Telegram: Grid aktif olduğunda bildir
+            if len(filtered_orders) > 0 and open_order_count == 0:
+                if self.telegram and self.config.telegram.enabled:
+                    self.telegram.send_message(
+                        f"📈 <b>Grid Aktif Oldu</b>\n"
+                        f"{len(filtered_orders)} emir üretildi\n"
+                        f"Rejim: {regime}"
+                    )
         else:
             # TODO: Gerçek emir gönderme + duplicate kontrolü
             pass
@@ -210,10 +220,23 @@ class RegimeBasedBot:
                 # Rejime göre strateji seç
                 if regime == "SIDEWAYS":
                     self.run_sideways_strategy(df, current_price)
+                    self.passive_grid_counter = 0
                 elif regime == "TRENDING":
                     self.run_trending_strategy(df, current_price)
+                    self.passive_grid_counter += 1
+
+                    # Grid uzun süre pasif kaldıysa bildir
+                    if self.passive_grid_counter >= 30:  # ~30 döngü ≈ 4-5 dakika
+                        if self.telegram and self.config.telegram.enabled:
+                            self.telegram.send_message(
+                                f"⚠️ <b>Grid Pasif</b>\n"
+                                f"Grid {self.passive_grid_counter} döngüdür pasif.\n"
+                                f"Piyasa trendli görünüyor."
+                            )
+                        self.passive_grid_counter = 0  # Reset
                 else:
                     self.run_conservative_strategy(df, current_price)
+                    self.passive_grid_counter += 1
 
                 # Risk kontrolü (basit)
                 should_pause, reason = self.risk.should_pause_trading(
