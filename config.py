@@ -30,7 +30,7 @@ class SymbolConfig:
     symbol: str = "ETHUSDT"                 # ETHUSDT - daha uygun grid aralığı
     quote_asset: str = "USDT"
     base_asset: str = "ETH"
-    leverage: int = 4                       # ETH için 4x mantıklı
+    leverage: int = 3                       # Live için önerilen düşük kaldıraç
     margin_mode: Literal["isolated", "cross"] = "isolated"
     position_mode: Literal["one_way", "hedge"] = "one_way"  # Grid için genellikle one_way
 
@@ -52,30 +52,30 @@ class GridConfig:
     manual_upper_price: float = 72000.0     # use_auto_range=False ise kullanılır
     manual_lower_price: float = 58000.0
     
-    grid_count: int = 22                    # ETH için daha iyi denge
+    grid_count: int = 20                    # Live için önerilen
     grid_step_type: Literal["arithmetic", "geometric"] = "arithmetic"
     
     # Her grid seviyesinde açılacak pozisyon büyüklüğü
     order_size_usdt: float = 0.0
-    order_size_pct_of_balance: float = 3.5  # 30 USDT için muhafazakâr
+    order_size_pct_of_balance: float = 3.0  # Live için biraz daha güvenli
     
     # === Gelişmiş Grid Yönetimi ===
     dynamic_grid: bool = True
-    recenter_hours: int = 1                    # Grid aralığını kaç saatte bir güncellesin
-    dynamic_range_lookback_hours: int = 1      # Son kaç saatlik mumlara bakarak aralık belirlensin
-    min_regime_duration_minutes: int = 20      # Rejim değiştirmek için minimum bekleme süresi (whipsaw koruması)
+    recenter_hours: int = 1
+    dynamic_range_lookback_hours: int = 1
+    min_regime_duration_minutes: int = 25      # Live için biraz daha güçlü koruma
     
-    take_profit_per_grid: float = 0.75      # ETH için biraz daha yüksek TP
+    take_profit_per_grid: float = 0.70      # Live için önerilen
     # Not: Vadeli grid'de genellikle her emir TP ile kapatılır
     
     # === Risk Limitleri (ÇOK ÖNEMLİ!) ===
-    max_total_exposure_usdt: float = 12.0   # 30 USDT için toplam açık pozisyon max 12 USDT
-    bot_stop_loss_pct: float = 10.0         # Grid aralığı dışına çıkarsa bot dursun
-    max_daily_loss_usdt: float = 5.0        # Günlük max zarar (30 USDT için düşük)
+    max_total_exposure_usdt: float = 10.0   # Live için önerilen
+    bot_stop_loss_pct: float = 8.0          # Live için önerilen
+    max_daily_loss_usdt: float = 4.0        # Live için önerilen
     
     # Trend yakalanırsa pozisyon birikmesin diye
-    max_open_grids: int = 12                # Aynı anda max açık grid seviyesi (güvenli)
-    max_open_orders: int = 8                # Aynı anda maksimum açık emir sayısı
+    max_open_grids: int = 10
+    max_open_orders: int = 6                # Live için önerilen
 
 
 @dataclass
