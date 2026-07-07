@@ -63,6 +63,7 @@ class GridConfig:
     dynamic_grid: bool = True
     recenter_hours: int = 1                    # Grid aralığını kaç saatte bir güncellesin
     dynamic_range_lookback_hours: int = 1      # Son kaç saatlik mumlara bakarak aralık belirlensin
+    min_regime_duration_minutes: int = 20      # Rejim değiştirmek için minimum bekleme süresi (whipsaw koruması)
     
     take_profit_per_grid: float = 0.75      # ETH için biraz daha yüksek TP
     # Not: Vadeli grid'de genellikle her emir TP ile kapatılır
@@ -74,6 +75,7 @@ class GridConfig:
     
     # Trend yakalanırsa pozisyon birikmesin diye
     max_open_grids: int = 12                # Aynı anda max açık grid seviyesi (güvenli)
+    max_open_orders: int = 8                # Aynı anda maksimum açık emir sayısı
 
 
 @dataclass

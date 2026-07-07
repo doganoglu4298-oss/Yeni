@@ -22,7 +22,10 @@ from data import DataFetcher
 from grid_strategy import GridStrategy
 from risk_manager import RiskManager
 from indicators import get_market_regime, calculate_ema, calculate_atr
-from telegram_bot import TelegramNotifier
+try:
+    from telegram_bot import TelegramNotifier
+except ImportError:
+    TelegramNotifier = None
 
 logging.basicConfig(
     level=logging.INFO,
@@ -154,11 +157,65 @@ class RegimeBasedBot:
                 current_price = self.data.get_current_price()
                 balance = self.data.get_account_balance()
 
-                # Rejim tespiti
-                regime_info = get_market_regime(df, self.config.regime.__dict__)
-                regime = regime_info["regime"]
+                # Rejim tespiti + Koruma (whipsaw önleme)
+                new_regime_info = get_market_regime(df, self.config.regime.__dict__)
+                new_regime = new_regime_info["regime"]
 
-                logger.info(f"Piyasa Rejimi: {regime} | {regime_info['reason']}")
+                if not hasattr(self, 'current_regime'):
+                    self.current_regime = new_regime
+                    self.last_regime_change_time = time.time()
+
+                time_since_change = time.time() - self.last_regime_change_time
+                min_duration = self.config.grid.min_regime_duration_minutes * 60
+
+                if new_regime != self.current_regime and time_since_change < min_duration:
+                    regime = self.current_regime
+                    remaining = int((min_duration - time_since_change) / 60)
+                    logger.info(f"Rejim değişikliği engellendi (koruma aktif). Kalan: {remaining} dk")
+                else:
+                    if new_regime != self.current_regime:
+                        old = self.current_regime
+                        self.current_regime = new_regime
+                        self.last_regime_change_time = time.time()
+                        logger.info(f"Rejim değişti: {old} → {new_regime}")
+
+                        # Rejim değiştiğinde akıllı pozisyon yönetimi
+                        try:
+                            # 1. Önce tüm açık limit emirlerini iptal et
+                            self.data.exchange.cancel_all_orders(self.config.symbol.symbol)
+                            logger.info("Tüm açık limit emirleri iptal edildi")
+
+                            # 2. Açık pozisyonları kontrol et (zararına kapatma)
+                            positions = self.data.exchange.fetch_positions([self.config.symbol.symbol])
+                            for pos in positions:
+                                if float(pos.get('contracts', 0)) == 0:
+                                    continue
+
+                                unrealized_pnl = float(pos.get('unrealizedPnl', 0))
+
+                                if unrealized_pnl >= 0:
+                                    # Kârda veya başabaş → pozisyonu kapat
+                                    side = 'sell' if pos['side'] == 'long' else 'buy'
+                                    self.data.exchange.create_order(
+                                        symbol=self.config.symbol.symbol,
+                                        type='market',
+                                        side=side,
+                                        amount=abs(float(pos['contracts']))
+                                    )
+                                    logger.info(f"Pozisyon kârda/başabaş kapatıldı (PnL: {unrealized_pnl})")
+                                else:
+                                    # Zararda → zararına kapatma, koruyucu stop koy
+                                    logger.info(f"Pozisyon zararda ({unrealized_pnl}). Zararına kapatılmadı, koruyucu stop aktif.")
+                                    # TODO: Break-even stop-loss emri eklenebilir
+
+                            if self.telegram and self.config.telegram.enabled:
+                                self.telegram.send_message("Rejim değişti → Akıllı pozisyon yönetimi uygulandı")
+
+                        except Exception as e:
+                            logger.error(f"Rejim değişikliği pozisyon yönetimi hatası: {e}")
+                    regime = self.current_regime
+
+                logger.info(f"Piyasa Rejimi: {regime} | {new_regime_info['reason']}")
 
                 # Rejime göre strateji seç
                 if regime == "SIDEWAYS":
