@@ -42,7 +42,16 @@ class RegimeBasedBot:
         self.risk = RiskManager(config)
         self.running = False
         self.passive_grid_counter = 0
-        self.last_order_update_time = 0  # Son emir güncelleme zamanı
+        self.last_order_update_time = 0
+        # Geliştirilmiş State Tracking
+        # price -> {
+        #   "side": "BUY" / "SELL",
+        #   "size": float,
+        #   "status": "open" / "filled",
+        #   "entry_price": float,
+        #   "target_price": float (opsiyonel)
+        # }
+        self.active_grid_levels = {}
 
         # Telegram entegrasyonu
         try:
@@ -58,11 +67,28 @@ class RegimeBasedBot:
     def run_sideways_strategy(self, df, current_price):
         logger.info(">>> SIDEWAYS modu aktif → Grid stratejisi çalışıyor")
 
+        # Eğer aktif grid seviyesi varsa, agresif yeniden hesaplama yapma
+        if len(self.active_grid_levels) > 0:
+            logger.info("Yönetim modu aktif → Mevcut seviyeler takip ediliyor (agresif tarama kapalı)")
+
+            # Basit trailing mantığı (fiyat hareketini takip et)
+            for level_price, info in list(self.active_grid_levels.items()):
+                if info["status"] == "filled":
+                    # Fiyat entry fiyatının lehine hareket ettiyse trailing fırsatı
+                    if info["side"] == "BUY" and current_price > info["entry_price"]:
+                        trailing_distance = current_price - info["entry_price"]
+                        logger.info(f"Trailing fırsatı (BUY): +{trailing_distance:.2f} USDT")
+                    elif info["side"] == "SELL" and current_price < info["entry_price"]:
+                        trailing_distance = info["entry_price"] - current_price
+                        logger.info(f"Trailing fırsatı (SELL): +{trailing_distance:.2f} USDT")
+
+            return
+
         if not self.grid_strategy.grid_levels:
             self.grid_strategy.calculate_grid_levels(current_price)
 
-        # Dinamik grid güncelleme
-        if self.config.grid.dynamic_grid:
+        # Dinamik grid güncelleme (sadece aktif seviye yoksa)
+        if self.config.grid.dynamic_grid and len(self.active_grid_levels) == 0:
             self.grid_strategy.calculate_dynamic_grid_range(
                 df, self.config.grid.dynamic_range_lookback_hours
             )
@@ -86,13 +112,12 @@ class RegimeBasedBot:
         # === Emir Güncelleme Sıklığı Kontrolü (60 saniye) ===
         current_time = time.time()
         if current_time - self.last_order_update_time < 60:
-            # Henüz 60 saniye geçmedi, emir güncelleme yapma
             return
 
         desired_orders = self.grid_strategy.generate_desired_orders(current_price)
 
-        # Fiyat toleransı ile filtreleme (%0.05 tolerans)
-        price_tolerance = 0.0005  # %0.05
+        # Fiyat toleransı ile filtreleme
+        price_tolerance = 0.0005
         filtered_orders = []
         existing_prices = [float(o['price']) for o in open_orders] if open_orders else []
 
@@ -105,12 +130,11 @@ class RegimeBasedBot:
             if not too_close:
                 filtered_orders.append(order)
 
-        self.last_order_update_time = current_time  # Güncelleme zamanını kaydet
+        self.last_order_update_time = current_time
 
         if self.config.dry_run:
             logger.info(f"[DRY RUN] {len(filtered_orders)} grid emri üretildi (Açık emir: {open_order_count}/{max_orders})")
 
-            # Telegram: Grid aktif olduğunda bildir
             if len(filtered_orders) > 0 and open_order_count == 0:
                 if self.telegram and self.config.telegram.enabled:
                     self.telegram.send_message(
@@ -118,7 +142,7 @@ class RegimeBasedBot:
                         f"{len(filtered_orders)} emir üretildi"
                     )
         else:
-            # TODO: Gerçek emir gönderme + duplicate kontrolü
+            # TODO: Gerçek emir gönderme
             pass
 
     # ============================================================
@@ -197,13 +221,14 @@ class RegimeBasedBot:
                         self.last_regime_change_time = time.time()
                         logger.info(f"Rejim değişti: {old} → {new_regime}")
 
-                        # Rejim değiştiğinde akıllı pozisyon yönetimi
+                        # Rejim değiştiğinde akıllı pozisyon yönetimi + state temizliği
                         try:
-                            # 1. Önce tüm açık limit emirlerini iptal et
                             self.data.exchange.cancel_all_orders(self.config.symbol.symbol)
                             logger.info("Tüm açık limit emirleri iptal edildi")
 
-                            # 2. Açık pozisyonları kontrol et (zararına kapatma)
+                            # State temizliği
+                            self.active_grid_levels.clear()
+
                             positions = self.data.exchange.fetch_positions([self.config.symbol.symbol])
                             for pos in positions:
                                 if float(pos.get('contracts', 0)) == 0:
@@ -212,7 +237,6 @@ class RegimeBasedBot:
                                 unrealized_pnl = float(pos.get('unrealizedPnl', 0))
 
                                 if unrealized_pnl >= 0:
-                                    # Kârda veya başabaş → pozisyonu kapat
                                     side = 'sell' if pos['side'] == 'long' else 'buy'
                                     self.data.exchange.create_order(
                                         symbol=self.config.symbol.symbol,
@@ -222,12 +246,10 @@ class RegimeBasedBot:
                                     )
                                     logger.info(f"Pozisyon kârda/başabaş kapatıldı (PnL: {unrealized_pnl})")
                                 else:
-                                    # Zararda → zararına kapatma, koruyucu stop koy
-                                    logger.info(f"Pozisyon zararda ({unrealized_pnl}). Zararına kapatılmadı, koruyucu stop aktif.")
-                                    # TODO: Break-even stop-loss emri eklenebilir
+                                    logger.info(f"Pozisyon zararda ({unrealized_pnl}). Zararına kapatılmadı.")
 
                             if self.telegram and self.config.telegram.enabled:
-                                self.telegram.send_message("Rejim değişti → Akıllı pozisyon yönetimi uygulandı")
+                                self.telegram.send_message("Rejim değişti → Pozisyonlar yönetildi + State temizlendi")
 
                         except Exception as e:
                             logger.error(f"Rejim değişikliği pozisyon yönetimi hatası: {e}")
