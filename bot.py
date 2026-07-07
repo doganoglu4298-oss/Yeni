@@ -22,6 +22,7 @@ from data import DataFetcher
 from grid_strategy import GridStrategy
 from risk_manager import RiskManager
 from indicators import get_market_regime, calculate_ema, calculate_atr
+from telegram_bot import TelegramNotifier
 
 logging.basicConfig(
     level=logging.INFO,
@@ -62,12 +63,30 @@ class RegimeBasedBot:
             )
             self.grid_strategy.calculate_grid_levels(current_price)
 
+        # === Açık Emir Kontrolü ===
+        try:
+            open_orders = self.data.exchange.fetch_open_orders(self.config.symbol.symbol)
+            open_order_count = len(open_orders)
+        except Exception as e:
+            logger.warning(f"Açık emirler çekilemedi: {e}")
+            open_order_count = 0
+
+        max_orders = self.config.grid.max_open_orders
+
+        if open_order_count >= max_orders:
+            logger.info(f"Açık emir limiti dolu ({open_order_count}/{max_orders}). Yeni emir üretilmiyor.")
+            return
+
         desired_orders = self.grid_strategy.generate_desired_orders(current_price)
 
+        # Aynı fiyatta zaten açık emir varsa filtrele (basit kontrol)
+        existing_prices = {float(o['price']) for o in open_orders} if open_orders else set()
+        filtered_orders = [o for o in desired_orders if o['price'] not in existing_prices]
+
         if self.config.dry_run:
-            logger.info(f"[DRY RUN] {len(desired_orders)} grid emri üretildi")
+            logger.info(f"[DRY RUN] {len(filtered_orders)} grid emri üretildi (Açık emir: {open_order_count}/{max_orders})")
         else:
-            # TODO: Gerçek emir gönderme
+            # TODO: Gerçek emir gönderme + duplicate kontrolü
             pass
 
     # ============================================================
