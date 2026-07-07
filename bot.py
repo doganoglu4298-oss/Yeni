@@ -96,8 +96,7 @@ class RegimeBasedBot:
                 if self.telegram and self.config.telegram.enabled:
                     self.telegram.send_message(
                         f"📈 <b>Grid Aktif Oldu</b>\n"
-                        f"{len(filtered_orders)} emir üretildi\n"
-                        f"Rejim: {regime}"
+                        f"{len(filtered_orders)} emir üretildi"
                     )
         else:
             # TODO: Gerçek emir gönderme + duplicate kontrolü
