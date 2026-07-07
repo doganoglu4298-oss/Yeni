@@ -38,6 +38,14 @@ class RegimeBasedBot:
         self.risk = RiskManager(config)
         self.running = False
 
+        # Telegram entegrasyonu
+        try:
+            from telegram_bot import TelegramNotifier
+            self.telegram = TelegramNotifier(config)
+        except Exception as e:
+            logger.warning(f"TelegramNotifier yüklenemedi: {e}")
+            self.telegram = None
+
     # ============================================================
     # 1. SIDEWAYS STRATEJİSİ (Grid)
     # ============================================================
@@ -108,7 +116,7 @@ class RegimeBasedBot:
         logger.info("Regime Based Bot başlatıldı...")
 
         # Telegram başlangıç mesajı (test için)
-        if hasattr(self, 'telegram') and self.config.telegram.enabled:
+        if self.telegram and self.config.telegram.enabled:
             try:
                 self.telegram.send_message(
                     "✅ <b>Bot Başlatıldı</b>\n"
