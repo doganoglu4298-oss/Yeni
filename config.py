@@ -20,7 +20,7 @@ class BinanceConfig:
     """Binance API ayarları"""
     api_key: str = os.getenv("BINANCE_API_KEY", "YOUR_API_KEY_HERE")
     api_secret: str = os.getenv("BINANCE_API_SECRET", "YOUR_API_SECRET_HERE")
-    testnet: bool = True                    # True = Paper trading / Testnet
+    testnet: bool = False                    # True = Paper trading / Testnet
     recv_window: int = 10000
 
 
