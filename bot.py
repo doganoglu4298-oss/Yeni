@@ -42,6 +42,7 @@ class RegimeBasedBot:
         self.risk = RiskManager(config)
         self.running = False
         self.passive_grid_counter = 0
+        self.last_order_update_time = 0  # Son emir güncelleme zamanı
 
         # Telegram entegrasyonu
         try:
@@ -82,11 +83,29 @@ class RegimeBasedBot:
             logger.info(f"Açık emir limiti dolu ({open_order_count}/{max_orders}). Yeni emir üretilmiyor.")
             return
 
+        # === Emir Güncelleme Sıklığı Kontrolü (60 saniye) ===
+        current_time = time.time()
+        if current_time - self.last_order_update_time < 60:
+            # Henüz 60 saniye geçmedi, emir güncelleme yapma
+            return
+
         desired_orders = self.grid_strategy.generate_desired_orders(current_price)
 
-        # Aynı fiyatta zaten açık emir varsa filtrele (basit kontrol)
-        existing_prices = {float(o['price']) for o in open_orders} if open_orders else set()
-        filtered_orders = [o for o in desired_orders if o['price'] not in existing_prices]
+        # Fiyat toleransı ile filtreleme (%0.05 tolerans)
+        price_tolerance = 0.0005  # %0.05
+        filtered_orders = []
+        existing_prices = [float(o['price']) for o in open_orders] if open_orders else []
+
+        for order in desired_orders:
+            too_close = False
+            for existing_price in existing_prices:
+                if abs(order['price'] - existing_price) / existing_price < price_tolerance:
+                    too_close = True
+                    break
+            if not too_close:
+                filtered_orders.append(order)
+
+        self.last_order_update_time = current_time  # Güncelleme zamanını kaydet
 
         if self.config.dry_run:
             logger.info(f"[DRY RUN] {len(filtered_orders)} grid emri üretildi (Açık emir: {open_order_count}/{max_orders})")
