@@ -193,3 +193,7 @@ if __name__ == "__main__":
 
     bot = GridBot(cfg)
     bot.run()
+from telegram_bot import TelegramNotifier
+
+tg = TelegramNotifier(config)
+tg.send_grid_status(status_dict, regime="SIDEWAYS", price=61250)
