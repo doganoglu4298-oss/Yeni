@@ -30,7 +30,7 @@ class RealisticGridBacktester:
         self.trades: List[Dict] = []
         self.equity_curve: List[float] = []
         self.current_equity: float = config.risk.initial_capital_usdt
-        self.fee_rate = 0.0004  # ~%0.04 round trip
+        self.fee_rate = 0.0005  # Biraz daha gerçekçi ücret (~%0.05)
 
     def run_backtest(self, df: pd.DataFrame, initial_capital: float = None) -> Dict:
         if initial_capital:
@@ -55,19 +55,22 @@ class RealisticGridBacktester:
             to_close = []
             for level_price, grid_info in list(open_grids.items()):
                 step = (self.strategy.upper_price - self.strategy.lower_price) / max(self.config.grid.grid_count - 1, 1)
-                tp_distance = step * 0.55
+                tp_distance = step * 0.9    # Daha gerçekçi ve zor TP
 
                 filled = False
                 exit_price = price
 
+                # Basit slippage simülasyonu
+                slippage = np.random.uniform(-0.0004, 0.0004)
+
                 if grid_info['side'] == 'BUY':
                     if high >= level_price + tp_distance:
                         filled = True
-                        exit_price = level_price + tp_distance
+                        exit_price = level_price + tp_distance + slippage
                 else:  # SELL
                     if low <= level_price - tp_distance:
                         filled = True
-                        exit_price = level_price - tp_distance
+                        exit_price = level_price - tp_distance + slippage
 
                 if filled:
                     pnl = grid_info['size'] * ((exit_price - grid_info['entry_price']) / grid_info['entry_price'])
@@ -96,9 +99,10 @@ class RealisticGridBacktester:
                     continue
 
                 filled = False
-                if level.side == "BUY" and low <= level.price:
+                # Daha gerçekçi dolma koşulu (fiyat seviyeyi net geçmeli)
+                if level.side == "BUY" and low <= level.price * 0.9995:
                     filled = True
-                elif level.side == "SELL" and high >= level.price:
+                elif level.side == "SELL" and high >= level.price * 1.0005:
                     filled = True
 
                 if filled:
