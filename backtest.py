@@ -55,7 +55,7 @@ class RealisticGridBacktester:
             to_close = []
             for level_price, grid_info in list(open_grids.items()):
                 step = (self.strategy.upper_price - self.strategy.lower_price) / max(self.config.grid.grid_count - 1, 1)
-                tp_distance = step * 0.9    # Daha gerçekçi ve zor TP
+                tp_distance = step * 0.72   # Dengeli TP mesafesi (gerçekçi ama çok zor değil)
 
                 filled = False
                 exit_price = price
