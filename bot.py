@@ -52,6 +52,7 @@ class RegimeBasedBot:
         #   "target_price": float (opsiyonel)
         # }
         self.active_grid_levels = {}
+        self.last_daily_summary_date = None  # Son günlük özet tarihi
 
         # Telegram entegrasyonu
         try:
@@ -257,6 +258,26 @@ class RegimeBasedBot:
 
                 logger.info(f"Piyasa Rejimi: {regime} | {new_regime_info['reason']}")
 
+                # === Günlük Özet (23:15 civarı) ===
+                now = datetime.now()
+                if now.hour == 23 and now.minute >= 15 and now.minute <= 20:
+                    if self.last_daily_summary_date != now.date():
+                        try:
+                            today_trades = [t for t in self.trades if hasattr(t, 'get') and t.get('timestamp') and t['timestamp'].date() == now.date()]
+                            today_pnl = sum(t.get('pnl', 0) for t in today_trades)
+                            msg = (
+                                f"📊 <b>Günlük Özet</b> ({now.strftime('%d.%m.%Y')})\n"
+                                f"Toplam İşlem: {len(today_trades)}\n"
+                                f"Günlük PnL: {today_pnl:.2f} USDT\n"
+                                f"Güncel Equity: {self.current_equity:.2f} USDT"
+                            )
+                            if self.telegram and self.config.telegram.enabled:
+                                self.telegram.send_message(msg)
+                            self.last_daily_summary_date = now.date()
+                            logger.info("Günlük özet gönderildi.")
+                        except Exception as e:
+                            logger.error(f"Günlük özet hatası: {e}")
+
                 # Rejime göre strateji seç
                 if regime == "SIDEWAYS":
                     self.run_sideways_strategy(df, current_price)
@@ -266,14 +287,14 @@ class RegimeBasedBot:
                     self.passive_grid_counter += 1
 
                     # Grid uzun süre pasif kaldıysa bildir
-                    if self.passive_grid_counter >= 30:  # ~30 döngü ≈ 4-5 dakika
+                    if self.passive_grid_counter >= 30:
                         if self.telegram and self.config.telegram.enabled:
                             self.telegram.send_message(
                                 f"⚠️ <b>Grid Pasif</b>\n"
                                 f"Grid {self.passive_grid_counter} döngüdür pasif.\n"
                                 f"Piyasa trendli görünüyor."
                             )
-                        self.passive_grid_counter = 0  # Reset
+                        self.passive_grid_counter = 0
                 else:
                     self.run_conservative_strategy(df, current_price)
                     self.passive_grid_counter += 1
