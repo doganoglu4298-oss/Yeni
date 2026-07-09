@@ -27,9 +27,9 @@ class BinanceConfig:
 @dataclass
 class SymbolConfig:
     """İşlem yapılan sembol ve piyasa ayarları"""
-    symbol: str = "ETHUSDT"                 # ETHUSDT - daha uygun grid aralığı
+    symbol: str = "SOLUSDT"                 # ETHUSDT - daha uygun grid aralığı
     quote_asset: str = "USDT"
-    base_asset: str = "ETH"
+    base_asset: str = "SOL"
     leverage: int = 3                       # Live için önerilen düşük kaldıraç
     margin_mode: Literal["isolated", "cross"] = "isolated"
     position_mode: Literal["one_way", "hedge"] = "one_way"  # Grid için genellikle one_way
