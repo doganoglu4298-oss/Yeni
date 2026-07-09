@@ -17,7 +17,7 @@ MAX_OPEN_ORDERS = [6, 8]
 
 def run_optimization():
     cfg = Config()
-    cfg.symbol.symbol = "ETHUSDT"
+    cfg.symbol.symbol = "SOLUSDT"   # Daha volatil coin ile test
     cfg.risk.initial_capital_usdt = 2000
     cfg.grid.order_size_pct_of_balance = 3.0
 
